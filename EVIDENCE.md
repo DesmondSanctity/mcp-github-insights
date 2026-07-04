@@ -61,6 +61,18 @@ VM boot — the actual resume is ~33ms. This is the "MCP tools don't need to sta
 warm" argument: idle to zero cost, and a cold tool call still returns in one
 round trip.
 
+## Real MCP client verification
+
+Connected the deployed server to **VS Code Copilot Chat** via `.vscode/mcp.json`
+(`type: http`, the deployed FQDN + `/mcp`). All three tools were invoked live
+from the chat client (not curl) and returned real data:
+
+- `get_repo_stats` → `unikraft/unikraft` (3762★)
+- `list_open_prs` → `unikraft/kraftkit`, `min_age_days=90` → 2 aged PRs (#1028, #528)
+- `search_code` → `mark3labs/mcp-go` for `NewStreamableHTTPServer` → 19 matches incl. the definition in `server/streamable_http.go`
+
+Full path exercised: MCP client → TLS to the microVM on `fra` → live GitHub API → back.
+
 ## Live tool calls against the deployed FQDN
 
 `get_repo_stats` for `unikraft/unikraft`:
