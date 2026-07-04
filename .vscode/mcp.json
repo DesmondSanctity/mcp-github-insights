@@ -1,8 +1,0 @@
-{
- "servers": {
-  "github-insights": {
-   "type": "http",
-   "url": "https://green-night-htkc4jbs.fra.unikraft.app/mcp"
-  }
- }
-}
