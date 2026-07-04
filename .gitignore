@@ -6,3 +6,6 @@
 mcp-github-insights
 *.oci.tar
 dist/
+
+# Editor / local MCP client config (points at a personal FQDN)
+.vscode/
