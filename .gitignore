@@ -1,0 +1,8 @@
+# Secrets and env
+.env
+
+# Build artifacts
+/mcp-server
+mcp-github-insights
+*.oci.tar
+dist/

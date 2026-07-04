@@ -1,0 +1,11 @@
+spec: v0.6
+
+runtime: base:latest
+rootfs: ./Dockerfile
+
+cmd: ["/mcp-server"]
+
+# GITHUB_TOKEN is intentionally NOT set here. Pass it at deploy time as a runtime
+# env var, e.g.:  unikraft run ... -e GITHUB_TOKEN=<token>
+env:
+  PORT: "8080"
