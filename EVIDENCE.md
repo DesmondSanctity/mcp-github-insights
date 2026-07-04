@@ -7,6 +7,7 @@ Real, captured output backing the article. Nothing here is paraphrased.
 - **Account/profile:** `anonx`
 - **Image:** `anonx/mcp-github-insights:latest`
 - **Deployed FQDN:** `https://green-night-htkc4jbs.fra.unikraft.app/mcp`
+- **GitHub repo:** https://github.com/DesmondSanctity/mcp-github-insights
 
 ## Toolchain versions
 
