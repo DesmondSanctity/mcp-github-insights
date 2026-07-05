@@ -6,7 +6,7 @@ Real, captured output backing the article. Nothing here is paraphrased.
 - **Metro:** `fra` (Frankfurt)
 - **Account/profile:** `anonx`
 - **Image:** `anonx/mcp-github-insights:latest`
-- **Deployed FQDN:** `https://green-night-htkc4jbs.fra.unikraft.app/mcp`
+- **Deployed FQDN:** `https://broken-snowflake-r572gbfj.fra.unikraft.app/mcp`
 - **GitHub repo:** https://github.com/DesmondSanctity/mcp-github-insights
 
 ## Toolchain versions
@@ -25,11 +25,19 @@ golang.org/x/oauth2 v0.36.0
 
 ## Cold boot time (deployed instance)
 
-```
-timing.boot-time: 32.504ms
-timing.net-time:  41.073ms
-state:            running
-```
+Two Dockerfile variants were built and measured head-to-head on `fra`. The
+static-PIE `scratch` build (now the canonical Dockerfile) boots fastest:
+
+| Variant | rootfs | `boot-time` | `net-time` |
+| --- | --- | --- | --- |
+| **static-PIE (adopted)** | `FROM scratch` | **23.9ms** | 32.3ms |
+| dynamic-PIE (initial fix) | `alpine:3.20` | 32.4ms | 41.1ms |
+
+Neither reaches Unikraft's headline **<10ms** — that figure refers to stateful
+snapshot/restore of an already-booted VM, not a cold boot of a fresh app. For a
+Go binary, the Go runtime's own init sets a floor around ~24ms on cold boot.
+Still, ~24ms is 10–40× faster than a typical container cold start (hundreds of ms
+to seconds).
 
 ## Scale-to-zero → cold resume
 
@@ -128,7 +136,7 @@ Go emits a `PT_INTERP` header for `-buildmode=pie` **even with internal linking*
 (confirmed: the ELF is "dynamically linked, interpreter …" despite being pure
 Go). On `FROM scratch` there is no loader for it to point at.
 
-**3. Fix — dynamic PIE + an alpine rootfs that provides the musl loader**
+**3. First working fix — dynamic PIE + an alpine rootfs that provides the musl loader**
 
 ```dockerfile
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildmode=pie -ldflags "-s -w" -o /mcp-server .
@@ -139,15 +147,39 @@ COPY --from=build /mcp-server /mcp-server
 ENTRYPOINT ["/mcp-server"]
 ```
 
-Result — clean boot:
+This booted cleanly (boot-time ~32ms), but ships a full alpine userspace.
+
+**4. Adopted build — truly static PIE on `scratch` (smaller + faster)**
+
+External linking with `-static-pie` produces a static PIE with **no** `PT_INTERP`,
+so `FROM scratch` works with no loader. This needs a C toolchain (CGO) building
+for amd64, plus `-tags netgo` to avoid libc for DNS:
+
+```dockerfile
+FROM --platform=linux/amd64 golang:1.25-bookworm AS build
+...
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+      -buildmode=pie \
+      -ldflags "-linkmode external -extldflags -static-pie -s -w" \
+      -tags netgo \
+      -o /mcp-server .
+
+FROM scratch
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /mcp-server /mcp-server
+ENTRYPOINT ["/mcp-server"]
+```
+
+Result — clean boot, ~24ms (vs ~32ms for alpine):
 
 ```
 Powered by Unikraft Ijiraq (0.21.0~a653e50)
-2026/07/04 22:17:21 MCP GitHub Insights server listening on 0.0.0.0:8080 (endpoint: /mcp)
+2026/07/05 00:18:59 MCP GitHub Insights server listening on 0.0.0.0:8080 (endpoint: /mcp)
 ```
 
-Also note: the metro is `x86_64`, so `GOARCH=amd64` is required — the arm64 dev
-machine would otherwise cross-compile the wrong architecture.
+Trade-off: the CGO/static-pie build must target amd64, so on an arm64 dev machine
+it runs under emulation (slower build) — but the metro needs `GOARCH=amd64`
+regardless.
 
 ## Final Kraftfile
 

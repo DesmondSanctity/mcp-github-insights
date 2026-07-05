@@ -1,16 +1,21 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.25-alpine AS build
+# Static-PIE build: a fully static position-independent executable with no dynamic
+# interpreter, so it runs on FROM scratch (no libc/loader needed). Unikraft's ELF
+# loader requires PIE; the metro is x86_64, so build for amd64 (external linking
+# via CGO gives us -static-pie; netgo avoids libc for DNS).
+FROM --platform=linux/amd64 golang:1.25-bookworm AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# Unikraft's ELF loader requires a position-independent executable (PIE), built
-# for the x86_64 (amd64) metro. The resulting dynamic PIE needs the musl loader,
-# which the alpine final stage below provides (a scratch image cannot).
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildmode=pie -ldflags "-s -w" -o /mcp-server .
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+      -buildmode=pie \
+      -ldflags "-linkmode external -extldflags -static-pie -s -w" \
+      -tags netgo \
+      -o /mcp-server .
 
-FROM --platform=linux/amd64 alpine:3.20
-RUN apk add --no-cache ca-certificates
+FROM scratch
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /mcp-server /mcp-server
 ENTRYPOINT ["/mcp-server"]
