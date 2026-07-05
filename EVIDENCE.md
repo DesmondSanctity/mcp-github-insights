@@ -6,7 +6,7 @@ Real, captured output backing the article. Nothing here is paraphrased.
 - **Metro:** `fra` (Frankfurt)
 - **Account/profile:** `anonx`
 - **Image:** `anonx/mcp-github-insights:latest`
-- **Deployed FQDN:** `https://broken-snowflake-r572gbfj.fra.unikraft.app/mcp`
+- **Deployed FQDN:** `https://old-meadow-lmmoqtgy.fra.unikraft.app/mcp`
 - **GitHub repo:** https://github.com/DesmondSanctity/mcp-github-insights
 
 ## Toolchain versions
@@ -68,6 +68,32 @@ The ~0.5s wall-clock is dominated by TLS + network latency to `fra`, not by the
 VM boot — the actual resume is ~33ms. This is the "MCP tools don't need to stay
 warm" argument: idle to zero cost, and a cold tool call still returns in one
 round trip.
+
+## Stateful snapshot/restore vs non-stateful cold boot (chasing <10ms)
+
+Unikraft's `--scale-to-zero` supports a `stateful` flag. We measured both to see
+which actually gets closer to the <10ms headline. Two metrics matter and they
+tell **different stories**:
+
+- `boot-time` = the platform-reported VM resume/boot time (CPU-side)
+- wall-clock = the real end-to-end wake latency a client experiences
+
+| Mode | reported `boot-time` | real wall-clock wake |
+| --- | --- | --- |
+| non-stateful (cold boot) | ~24ms | **~0.5s** |
+| stateful (snapshot restore), run 1 | 14.4ms | ~4.6s |
+| stateful (snapshot restore), run 2 | 15.3ms | ~7.6s |
+
+**Takeaway:** stateful restore lowers the *reported* boot-time toward ~15ms (still
+not <10ms for this workload), but the *real* wake is several seconds because the
+128MiB memory snapshot has to be loaded from storage. For a tiny, fast-booting Go
+server, **non-stateful cold boot wins end-to-end** (~0.5s vs several seconds).
+
+Stateful snapshot/restore pays off for the opposite kind of workload — large
+memory footprints or slow initialization (databases with warm caches, loaded ML
+models, heavy runtimes) where re-initializing from scratch would cost far more
+than loading a snapshot. Our MCP server is the wrong shape to benefit, so the
+canonical deployment stays **non-stateful**.
 
 ## Real MCP client verification
 
